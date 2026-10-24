@@ -11,7 +11,7 @@ def data_import(data_name):
     """
     data_path = Path(__file__).parent / "data" / data_name
     
-    data = np.loadtxt(data_path, delimiter=',')
+    data = np.loadtxt(data_path)
     x = data[:, :-1]
     y = data[:, -1:]
     m = x.shape[0]
@@ -20,7 +20,7 @@ def data_import(data_name):
 
 def feature_normalize(x):
     """
-    归一化,这里只对x做归一化保留真实预测
+    归一化
     """
     mu = x.mean(axis=0)
     sigma = x.std(axis=0)
@@ -54,92 +54,106 @@ def gradient_descent(x, y, m, alpha=0.1, epsilon=0.01):
             flag=1
             break
 
+    if flag == 0:
+        return 'converged', theta, loss_history
+    elif flag == 1:
+        return 'too many times', theta, loss_history
+
+def plot_loss_curves(loss_histories):
     plt.figure()
-    plt.plot(loss_history)
-    plt.xlabel('Iteration times')
+    for alpha, loss_history in loss_histories.items():
+        plt.plot(loss_history, label=f'learning rate={alpha}')
+    plt.xlabel('Epoch')
     plt.ylabel('Loss')
-    plt.title('Loss Curve')
+    plt.title('Loss curves for different learning rates')
+    plt.legend()
+    plt.grid(True)
     plt.show()
 
-    if flag == 0:
-        return 'converged', theta
-    elif flag == 1:
-        return 'too many times', theta
+def plot_scatter(x, y, title, x_label, color='r'):
+    ax = plt.subplot()
+    ax.set_title(title)
+    ax.scatter(x, y, color=color)
+    ax.set_xlabel(x_label)
+    ax.set_ylabel('reach envelope')
+    plt.show()
 
-def verify_function(theta, size, x1, x2, y, verify_num, seed=42):
-    """
-    随机选几个打印结果,还没改
-    """
-    if verify_num > size:
-        print(f'too many verify_num')
-        return
+def plot_prediction(y_true, y_pred):
+    residual_sum = np.sum((y_true - y_pred) ** 2)
+    total_sum = np.sum((y_true - np.mean(y_true)) ** 2)
+    r_squared = 1 - residual_sum / total_sum
+    low = min(np.min(y_true), np.min(y_pred))
+    high = max(np.max(y_true), np.max(y_pred))
 
-    np.random.seed(seed) # 在choice之前选几个种子
-    selected = np.random.choice(size, size=verify_num, replace=False)
-    x1_selected = x1[selected]
-    x2_selected = x2[selected]
-    y_selected = y[selected]
-    for i in range(verify_num):
-        y_hat = theta[0] + theta[1]*x1_selected[i] + theta[2]*x2_selected[i]
-        error = abs((y_selected[i] - y_hat) / y_selected[i])*100
-        print(f'y={y_selected[i]:.2f}, predict={y_hat:.2f}, error={error:.4f}%')
-
-def plot(x, y, theta, title):
-    """
-    自动检测，如果增广矩阵n=3就画三维图
-    """
-
-    if x.shape[1] == 3:
-
-        x1 = x[:,1]
-        x2 = x[:,2]
-
-        ax = plt.subplot(projection='3d')
-        ax.set_title(title)
-        
-        ax.scatter(x1, x2, y.T, 'r')
-        ax.set_xlabel('X')
-        ax.set_ylabel('Y')
-        ax.set_zlabel('Z')
-
-        a = np.linspace(np.min(x1), np.max(x1), 30)
-        c = np.linspace(np.min(x2), np.max(x2), 30)
-        X, Y = np.meshgrid(a,c)
-
-        ax.plot_surface(
-            X,
-            Y,
-            theta[0,0] + theta[0,1]*X + theta[0,2]*Y,
-            color = 'y',
-            alpha = 0.6 # 透明度
-        )
-        plt.show()
-    else:
-        print(f'绘图暂时只支持x元素数目为2，目前元素为{x.shape[1]-1}')
+    plt.figure()
+    plt.scatter(y_true, y_pred, label='test sample')
+    plt.plot([low, high], [low, high], label='ideal prediction line')
+    plt.xlabel('real reach envelope / cm')
+    plt.ylabel('predict reach envelope / cm')
+    plt.title(f'predict consequence')
+    plt.legend()
+    plt.grid(False)
+    plt.axis('equal')
+    plt.xlim(low, high)
+    plt.ylim(low, high)
+    plt.show()
 
 
 
 
 def main():
     # 读取数据
-    x, y, m = data_import("ex1data2.txt")
-    x_norm,_,_ = feature_normalize(x)
+    x, y, m = data_import("reach_data_120.txt")
+    plot_scatter(x[:,0],y,'scatter plot of shoulder width versus reach encelope','shoulder width')
+    plot_scatter(x[:,1],y,'scatter plot of height versus reach envelop','height', color='b')
+
+    x_norm,mu,sigma = feature_normalize(x)
+    y_norm,mu_y,sigma_y = feature_normalize(y)
+    print(f'肩宽均值：{mu[0]:.4f}, 身高均值：{mu[1]:.4f},可达域均值：{mu_y[0]:.4f}')
+
+    # 增广矩阵，不单独写b
     ones = np.ones((m,1))
     x_norm = np.append(ones, x_norm, axis=1) # 增广矩阵
 
+    # 划分数据集
     train_num = int(0.7*m)
     x_train = x_norm[:train_num]
-    y_train = y[:train_num]
+    y_train = y_norm[:train_num]
     x_test = x_norm[train_num:]
-    y_test = y[train_num:]
 
-    status, theta = gradient_descent(x_train, y_train, train_num, alpha=0.01)
-    print(status, theta)
+    learning_rates = [0.5, 0.1, 0.05, 0.01, 0.001]
+    loss_histories = {}
+    models = {}
+    for alpha in learning_rates:
+        models[alpha] = gradient_descent(
+            x_train, y_train, train_num, alpha=alpha
+        )
+        loss_histories[alpha] = models[alpha][2]
+    plot_loss_curves(loss_histories)
 
-    # verify_function(theta, m-train_num, x_test, y_test, 5)
-    
-    plot(x_train, y_train, theta,'train')
-    plot(x_test, y_test, theta, 'test')
+    alpha = 0.05
+    status, theta, _ = models[alpha]
+    theta_real = mu_y/mu[0] * theta
+    print(f'learning rate={alpha}, {status}, {theta_real}')
+
+    # 使用测试集预测可达距离，并还原为 cm
+    y_pred = (theta @ x_test.T).T * sigma_y + mu_y
+    y_test_real = y[train_num:]
+    errors = y_pred[:, 0] - y_test_real[:, 0]
+    mae = np.mean(np.abs(errors))
+    mse = np.mean(errors ** 2)
+    print(f'MAE={mae:.4f} cm, MSE={mse:.4f} cm^2')
+    print('测试集预测结果：')
+    print(f"{'样本':>4} {'肩宽(cm)':>10} {'身高(cm)':>10} {'预测可达域(cm)':>16} {'真实可达域(cm)':>16} {'err(cm)':>10}")
+    for i, (size, predicted, actual, error) in enumerate(
+        zip(x[train_num:], y_pred[:, 0], y_test_real[:, 0], errors), start=1
+    ):
+        print(
+            f'{i:>4} {size[0]:>10.1f} {size[1]:>10.1f} '
+            f'{predicted:>16.2f} {actual:>16.2f} {error:>10.2f}'
+        )
+
+    plot_prediction(y_test_real[:, 0], y_pred[:, 0])
 
 if __name__ == '__main__':
     main()

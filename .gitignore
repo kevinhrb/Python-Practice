@@ -1,1 +1,5 @@
 .env
+.vscode/
+*.cache
+.mpl-cache-report/
+__pycache__/
