@@ -9,5 +9,8 @@
 *.png
 *.jpg
 *.mat
+*.docx
+*.txt
+*.dat
 **/data/
 **/consequence/
