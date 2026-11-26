@@ -1,6 +1,13 @@
+# 缓存文件
 .env
 .vscode/
 *.cache
 .mpl-cache-report/
-__pycache__/
+**/__pycache__/
+
+# 数据、结果文件
+*.png
+*.jpg
+*.mat
+**/data/
 **/consequence/
